@@ -1,4 +1,4 @@
-import { put, list } from "@vercel/blob"
+import { put, get } from "@vercel/blob"
 import { Game, HistorySnapshot } from "@/types"
 import { StateCode } from "@/lib/ev-calculator"
 
@@ -6,19 +6,21 @@ function blobPath(state: StateCode): string {
   return `scrapger/history-${state}.json`
 }
 
-export async function readHistory(state: StateCode = "oregon"): Promise<HistorySnapshot[]> {
+async function readJsonBlob<T>(pathname: string): Promise<T | null> {
   try {
-    const path = blobPath(state)
-    const { blobs } = await list({ prefix: path, limit: 1 })
-    const match = blobs.find(b => b.pathname === path)
-    if (!match) return []
-    const res = await fetch(match.url, { cache: "no-store" })
-    if (!res.ok) return []
-    return (await res.json()) as HistorySnapshot[]
+    const result = await get(pathname, { access: "private" })
+    if (!result || result.statusCode !== 200 || !result.stream) return null
+    const text = await new Response(result.stream as ReadableStream).text()
+    return JSON.parse(text) as T
   } catch (err) {
-    console.warn("[history] read failed:", err)
-    return []
+    console.warn(`[blob] read failed for ${pathname}:`, err)
+    return null
   }
+}
+
+export async function readHistory(state: StateCode = "oregon"): Promise<HistorySnapshot[]> {
+  const data = await readJsonBlob<HistorySnapshot[]>(blobPath(state))
+  return data ?? []
 }
 
 export async function saveSnapshot(games: Game[], state: StateCode = "oregon"): Promise<void> {
@@ -35,7 +37,7 @@ export async function saveSnapshot(games: Game[], state: StateCode = "oregon"): 
   const trimmed = history.slice(-30)
 
   await put(blobPath(state), JSON.stringify(trimmed, null, 2), {
-    access: "public",
+    access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
     allowOverwrite: true,
