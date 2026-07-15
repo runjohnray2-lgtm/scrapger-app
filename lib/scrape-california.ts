@@ -6,6 +6,7 @@ export interface CARawGame {
   unclaimed: number | null
   totalPrizes: number | null
   printRunOverride: number | null
+  gameUrl: string
 }
 
 interface CAListItem {
@@ -122,6 +123,7 @@ export async function scrapeCaliforniaLottery(): Promise<CARawGame[]> {
       unclaimed: tier.remaining,
       totalPrizes: tier.total,
       printRunOverride,
+      gameUrl: `${BASE}${item.GameProductPage}`,
     })
   }
 

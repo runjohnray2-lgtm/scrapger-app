@@ -33,6 +33,7 @@ export interface RawGame {
   unclaimed?: number | null
   totalPrizes?: number | null
   printRunOverride?: number | null
+  gameUrl?: string | null
 }
 
 function getPrintRun(price: number, state: StateCode): number {
@@ -50,6 +51,20 @@ function getSignal(
   if (ev >= 0) return "BUY"
   if (gintherRatio !== null && gintherRatio >= 5) return "WATCH"
   return "HOLD"
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+}
+
+// Tickets needed to reach a target win probability, given per-ticket odds p,
+// using P(win at least once) = 1 - (1 - p)^n  =>  n = ln(1 - target) / ln(1 - p)
+function ticketsForPct(targetPct: number, p: number): number {
+  if (p <= 0 || p >= 1) return 0
+  return Math.log(1 - targetPct) / Math.log(1 - p)
 }
 
 export function calculateEV(
@@ -77,25 +92,50 @@ export function processGames(
     const unclaimed = raw.unclaimed ?? null
     const totalPrizes = raw.totalPrizes ?? null
 
-    // Ginther Ratio
-    // CA: exact from "X of Y" prize counts  → totalPrizes / unclaimed
-    // OR: estimated from % sold             → 1 / (1 - pctSold)
-    //     Logic: if X prizes remain at Y% sold, game started with ~X/(1-Y) prizes
-    //     Example: 1 prize left, 98% sold → started with ~50 prizes → 50x ratio
     let gintherRatio: number | null = null
 
     if (unclaimed !== null && unclaimed > 0) {
       if (totalPrizes !== null) {
-        // California — exact
         gintherRatio = totalPrizes / unclaimed
       } else if (raw.pctSold < 0.9999) {
-        // Oregon — estimated
         const estimatedTotal = unclaimed / (1 - raw.pctSold)
-        gintherRatio = estimatedTotal / unclaimed // = 1 / (1 - pctSold)
+        gintherRatio = estimatedTotal / unclaimed
       }
     }
 
     const signal = getSignal(ev, gintherRatio, unclaimed)
+
+    const oddsPerTicket =
+      unclaimed !== null && unclaimed > 0 && ticketsLeft > 0
+        ? unclaimed / ticketsLeft
+        : 0
+
+    const currentTopPrizeOdds =
+      oddsPerTicket > 0
+        ? `1 in ${Math.round(1 / oddsPerTicket).toLocaleString()}`
+        : "N/A"
+
+    const costFor1PctShot =
+      oddsPerTicket > 0 ? Math.round(ticketsForPct(0.01, oddsPerTicket) * raw.price) : 0
+    const costFor5PctShot =
+      oddsPerTicket > 0 ? Math.round(ticketsForPct(0.05, oddsPerTicket) * raw.price) : 0
+    const costFor10PctShot =
+      oddsPerTicket > 0 ? Math.round(ticketsForPct(0.10, oddsPerTicket) * raw.price) : 0
+
+    let buyGuide: string
+    if (unclaimed === 0) {
+      buyGuide = "No top prizes remain unclaimed — skip this game."
+    } else if (signal === "GINTHER BUY") {
+      buyGuide = `Strong signal: Ginther Ratio ${gintherRatio?.toFixed(1)}x with positive EV. For a 5% shot at the top prize, budget ~$${costFor5PctShot.toLocaleString()}. Still a gamble, not an investment.`
+    } else if (oddsPerTicket > 0) {
+      buyGuide = `For a 5% shot at the top prize, budget ~$${costFor5PctShot.toLocaleString()}. Treat as entertainment, not investment.`
+    } else {
+      buyGuide = "Not enough data to size a budget for this game yet."
+    }
+
+    const isLimitedPrize =
+      (totalPrizes !== null && totalPrizes <= 20) ||
+      (unclaimed !== null && unclaimed <= 2)
 
     return {
       name: raw.name,
@@ -105,10 +145,20 @@ export function processGames(
       printRun,
       ticketsLeft,
       ev,
+      evScore: ev,
       gintherRatio,
       unclaimed,
       signal,
       state,
+      gameNum: `${state}-${slugify(raw.name)}`,
+      gameUrl: raw.gameUrl ?? "",
+      oddsPerTicket,
+      currentTopPrizeOdds,
+      costFor1PctShot,
+      costFor5PctShot,
+      costFor10PctShot,
+      buyGuide,
+      isLimitedPrize,
     }
   })
 }

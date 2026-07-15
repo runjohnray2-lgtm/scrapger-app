@@ -20,6 +20,7 @@ export async function GET() {
       unclaimed: g.unclaimed,
       totalPrizes: g.totalPrizes,
       printRunOverride: g.printRunOverride,
+      gameUrl: g.gameUrl,
     }))
     const games = processGames(mapped, "california")
     await saveSnapshot(games, "california")
