@@ -110,8 +110,8 @@ export function GamesTable({ games }: GamesTableProps) {
         aVal = a.pctSold
         bVal = b.pctSold
       } else if (sortKey === "unclaimed") {
-        aVal = a.unclaimed
-        bVal = b.unclaimed
+        aVal = a.unclaimed ?? 0
+        bVal = b.unclaimed ?? 0
       }
       return sortDir === "desc" ? bVal - aVal : aVal - bVal
     })
@@ -267,7 +267,7 @@ export function GamesTable({ games }: GamesTableProps) {
                         : "text-white"
                     )}
                   >
-                    {game.unclaimed.toLocaleString()}
+                    {(game.unclaimed ?? 0).toLocaleString()}
                   </span>
                 </td>
 
