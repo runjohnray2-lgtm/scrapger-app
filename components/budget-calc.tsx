@@ -13,7 +13,7 @@ export function BudgetCalc({ games }: BudgetCalcProps) {
   const [budget, setBudget] = useState(50)
 
   const buyGames = games.filter(
-    (g) => g.signal.includes("BUY") && g.unclaimed > 0 && g.oddsPerTicket > 0
+    (g) => g.signal.includes("BUY") && g.unclaimed !== null && g.unclaimed > 0 && g.oddsPerTicket > 0
   )
 
   const results = useMemo(() => {
